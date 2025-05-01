@@ -3,7 +3,73 @@ import { GraffitiLocal } from "@graffiti-garden/implementation-local";
 import { GraffitiRemote } from "@graffiti-garden/implementation-remote";
 import { GraffitiPlugin } from "@graffiti-garden/wrapper-vue";
 
+const ReactionBar = {
+  props: ['itemId'],
+  data() {
+    return {
+      emojis: ['👍', '❤️', '‼️'],
+      reactions: {}
+    }
+  },
+  mounted() {
+    const saved = localStorage.getItem(`reactions-${this.itemId}`);
+    if (saved) {
+      this.reactions = JSON.parse(saved);
+    }
+  },
+  methods: {
+    toggleReaction(emoji) {
+      if (this.reactions[emoji]) {
+        delete this.reactions[emoji];
+      } else {
+        this.reactions[emoji] = true;
+      }
+      localStorage.setItem(`reactions-${this.itemId}`, JSON.stringify(this.reactions));
+    },
+    isActive(emoji) {
+      return this.reactions[emoji] === true;
+    }
+  },
+  template: `
+    <div class="reaction-bar">
+      <button 
+        v-for="emoji in emojis" 
+        :key="emoji"
+        @click="toggleReaction(emoji)"
+        :class="['reaction-button', { active: isActive(emoji) }]">
+        {{ emoji }}
+      </button>
+    </div>
+  `
+}
+
+const ProfileAvatar = {
+  props: ['size', 'name', 'picture'],
+  computed: {
+    avatarStyle() {
+      return {
+        width: `${this.size}px`,
+        height: `${this.size}px`,
+        fontSize: `${Math.floor(this.size/2.5)}px`
+      };
+    },
+    initial() {
+      return this.name ? this.name.charAt(0).toUpperCase() : '?';
+    }
+  },
+  template: `
+    <div class="profile-avatar" :style="avatarStyle">
+      <img v-if="picture" :src="picture" alt="Profile" />
+      <div v-else class="placeholder">{{ initial }}</div>
+    </div>
+  `
+}
+
 createApp({
+  components: {
+    ReactionBar,
+    ProfileAvatar
+  },
   data() {
     return {
       baseChannel: "designftw",
@@ -19,6 +85,15 @@ createApp({
       newGroupName: "",
       isRenamingGroup: false,
       
+
+      profileName: "",
+      profilePicture: null,
+      profileBirthday: "",
+      profileDescription: "",
+      selectedFile: null,
+
+
+      userProfiles: {},
 
       drafts: [],
       newDraft: {
@@ -69,6 +144,21 @@ createApp({
             }
           }
         }
+      },
+      
+
+      profileSchema: {
+        properties: {
+          value: {
+            required: ['name'],
+            properties: {
+              name: { type: 'string' },
+              picture: { type: 'string' },
+              birthday: { type: 'string' },
+              description: { type: 'string' }
+            }
+          }
+        }
       }
     };
   },
@@ -76,6 +166,42 @@ createApp({
   computed: {
     channels() {
       return [this.baseChannel];
+    },
+    formattedBirthday() {
+      if (!this.profileBirthday) return "";
+      try {
+        const date = new Date(this.profileBirthday);
+        return date.toLocaleDateString('en-US', { 
+          year: 'numeric', 
+          month: 'long', 
+          day: 'numeric' 
+        });
+      } catch (e) {
+        return this.profileBirthday;
+      }
+    }
+  },
+  
+  mounted() {
+    const savedProfile = localStorage.getItem('chat-profile');
+    if (savedProfile) {
+      const profile = JSON.parse(savedProfile);
+      this.profileName = profile.name || '';
+      this.profilePicture = profile.picture || null;
+      this.profileBirthday = profile.birthday || '';
+      this.profileDescription = profile.description || '';
+    }
+    
+    this.loadDraftsFromStorage();
+    
+    const savedUserProfiles = localStorage.getItem('user-profiles-cache');
+    if (savedUserProfiles) {
+      try {
+        this.userProfiles = JSON.parse(savedUserProfiles);
+      } catch (e) {
+        console.error("Error loading user profiles cache:", e);
+        this.userProfiles = {};
+      }
     }
   },
   
@@ -135,7 +261,11 @@ createApp({
               type: "message",
               id: Date.now().toString(),
               content: this.newMessage,
-              timestamp: Date.now()
+              timestamp: Date.now(),
+              userProfile: {
+                name: this.profileName || "Anonymous",
+                picture: this.profilePicture
+              }
             },
             channels: this.currentChatChannel
           },
@@ -241,14 +371,108 @@ createApp({
       return updates.length > 0 ? updates[0].value.name : chatObj.value.object.name;
     },
     
-
-    formatTime(timestamp) {
-      return new Date(timestamp).toLocaleTimeString();
+    handleFileSelect(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+      
+      if (!file.type.match('image.*')) {
+        alert('Please select an image file');
+        return;
+      }
+      
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        this.profilePicture = e.target.result;
+      };
+      reader.readAsDataURL(file);
     },
     
-
+    async saveProfile(session) {
+      if (!session || !this.profileName.trim()) {
+        alert("Please enter a display name");
+        return;
+      }
+      
+      try {
+        await this.$graffiti.put(
+          {
+            value: {
+              name: this.profileName,
+              picture: this.profilePicture,
+              birthday: this.profileBirthday,
+              description: this.profileDescription
+            },
+            channels: this.channels
+          },
+          session
+        );
+        
+        localStorage.setItem('chat-profile', JSON.stringify({
+          name: this.profileName,
+          picture: this.profilePicture,
+          birthday: this.profileBirthday,
+          description: this.profileDescription
+        }));
+        
+        this.cacheUserProfile(session.actor, {
+          name: this.profileName,
+          picture: this.profilePicture,
+          birthday: this.profileBirthday,
+          description: this.profileDescription
+        });
+        
+        alert("Profile saved successfully!");
+      } catch (error) {
+        console.error("Error saving profile:", error);
+        alert("Error saving profile. Please try again.");
+      }
+    },
+    
+    getUserProfile(actorId) {
+      if (this.$graffitiSession.value && actorId === this.$graffitiSession.value.actor) {
+        return {
+          name: this.profileName || actorId.substring(0, 8),
+          picture: this.profilePicture,
+          birthday: this.profileBirthday,
+          description: this.profileDescription
+        };
+      }
+      
+      return this.userProfiles[actorId] || {
+        name: actorId.substring(0, 8),
+        picture: null
+      };
+    },
+    
+    cacheUserProfile(actorId, profile) {
+      this.userProfiles[actorId] = profile;
+      localStorage.setItem('user-profiles-cache', JSON.stringify(this.userProfiles));
+    },
+    
     isOwnMessage(message) {
       return message.actor === this.$graffitiSession.value.actor;
+    },
+    
+    getUserName(message) {
+      if (message.value.userProfile && message.value.userProfile.name) {
+        return message.value.userProfile.name;
+      }
+      
+      const profile = this.getUserProfile(message.actor);
+      return profile.name || message.actor.substring(0, 8);
+    },
+    
+    getUserPicture(message) {
+      if (message.value.userProfile && message.value.userProfile.picture) {
+        return message.value.userProfile.picture;
+      }
+      
+      const profile = this.getUserProfile(message.actor);
+      return profile.picture;
+    },
+    
+    formatTime(timestamp) {
+      return new Date(timestamp).toLocaleTimeString();
     },
     
     switchTab(tab) {
@@ -318,17 +542,6 @@ createApp({
     deleteDraft(index) {
       this.drafts.splice(index, 1);
       this.saveDraftsToStorage();
-    },
-    
-    findChatByName(name) {
-      // Need to add implementation for this still
-    },
-    
-    useDraft(draft) {
-      // Need to add this too
-      this.findChatByName(draft.recipient);
-      
-      this.newMessage = draft.content;
     },
     
     saveDraftsToStorage() {

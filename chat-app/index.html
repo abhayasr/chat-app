@@ -1,10 +1,11 @@
 <!doctype html>
 <html lang="en">
-    <head>
-        <meta charset="UTF-8" />
-        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-        <title>Chat App</title>
-        <script type="importmap">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>DraftChat</title>
+    <script type="importmap">
             {
                 "imports": {
                     "vue": "https://cdn.jsdelivr.net/npm/vue@3.5.13/dist/vue.esm-browser.js",
@@ -14,218 +15,254 @@
                 }
             }
         </script>
-        <link rel="stylesheet" href="style.css" />
-    </head>
-    <body>
-        <div id="app">
-            <h1>Chat App</h1>
-            
-            <button v-if="!$graffitiSession.value" @click="$graffiti.login()">
-                Log In
-            </button>
-            <button v-else @click="$graffiti.logout($graffitiSession.value)" class="logout-btn">
-                Log Out
-            </button>
+    <link rel="stylesheet" href="style.css" />
+</head>
 
-            <div v-if="$graffitiSession.value">
-                <div v-if="!currentChatId">
-                    <div class="tabs">
-                        <button 
-                            :class="{ active: activeTab === 'chats' }" 
-                            @click="switchTab('chats')">
-                            Chats
-                        </button>
-                        <button 
-                            :class="{ active: activeTab === 'drafts' }" 
-                            @click="switchTab('drafts')">
-                            Drafts
-                        </button>
-                    </div>
-                    
-                    <div v-if="activeTab === 'chats'" class="home-container">
-                        <h2>Create Chat</h2>
-                        <div class="input-group">
-                            <input 
-                                type="text" 
-                                v-model="newChatName" 
-                                placeholder="Enter chat name" 
-                                @keyup.enter="createChat($graffitiSession.value)" />
-                            <button @click="createChat($graffitiSession.value)">Create</button>
+<body>
+    <div id="app">
+        <h1>DraftChat</h1>
+
+        <button v-if="!$graffitiSession.value" @click="$graffiti.login()">
+            Log In
+        </button>
+        <button v-else @click="$graffiti.logout($graffitiSession.value)" class="logout-btn">
+            Log Out
+        </button>
+
+        <div v-if="$graffitiSession.value">
+            <div v-if="!currentChatId">
+                <div class="tabs">
+                    <button :class="{ active: activeTab === 'chats' }" @click="switchTab('chats')">
+                        Chats
+                    </button>
+                    <button :class="{ active: activeTab === 'drafts' }" @click="switchTab('drafts')">
+                        Drafts
+                    </button>
+                    <button :class="{ active: activeTab === 'profile' }" @click="switchTab('profile')">
+                        Profile
+                    </button>
+                </div>
+
+                <div v-if="activeTab === 'profile'" class="profile-tab">
+                    <h2>Your Profile</h2>
+
+                    <div class="profile-container">
+                        <div class="profile-picture-container">
+                            <profile-avatar :size="120" :name="profileName" :picture="profilePicture">
+                            </profile-avatar>
                         </div>
-                        
-                        <h2>Available Chats</h2>
-                        <graffiti-discover
-                            v-slot="{ objects: chatObjects, isInitialPolling }"
-                            :channels="channels"
-                            :schema="chatSchema"
-                        >
-                            <graffiti-discover
-                                v-slot="{ objects: nameUpdates }"
-                                :channels="channels"
-                                :schema="groupNameSchema"
-                            >
-                                <div v-if="isInitialPolling">Loading chats...</div>
-                                <div v-else-if="chatObjects.length === 0">No chats available. Create one!</div>
-                                <div v-else class="chat-list">
-                                    <div 
-                                        v-for="chat in chatObjects" 
-                                        :key="chat.url"
-                                        class="chat-item"
-                                        @click="enterChat(chat.value.object.channel, getLatestChatName(chat, nameUpdates))">
-                                        {{ getLatestChatName(chat, nameUpdates) }}
-                                    </div>
-                                </div>
-                            </graffiti-discover>
-                        </graffiti-discover>
-                    </div>
-                    
-                    <div v-if="activeTab === 'drafts'" class="drafts-tab">
-                        <h2>Message Drafts</h2>
-                        
-                        <div class="draft-form">
-                            <h3>{{ editingDraftIndex !== null ? 'Edit Draft' : 'New Draft' }}</h3>
+
+                        <div class="profile-form">
                             <div class="input-row">
-                                <label for="recipient">Recipient:</label>
-                                <input 
-                                    type="text" 
-                                    id="recipient" 
-                                    v-model="newDraft.recipient" 
-                                    placeholder="Enter recipient name" />
+                                <label for="profileName">Display Name:</label>
+                                <input type="text" id="profileName" v-model="profileName"
+                                    placeholder="Enter your display name" />
                             </div>
+
                             <div class="input-row">
-                                <label for="draftContent">Message:</label>
-                                <textarea 
-                                    id="draftContent"
-                                    v-model="newDraft.content" 
-                                    placeholder="Type your message draft here..."></textarea>
+                                <label for="profileBirthday">Birthday:</label>
+                                <input type="date" id="profileBirthday" v-model="profileBirthday" />
                             </div>
-                            <div class="draft-actions">
-                                <button v-if="editingDraftIndex !== null" @click="updateDraft">
-                                    Update Draft
-                                </button>
-                                <button v-else @click="addDraft">
-                                    Save Draft
-                                </button>
-                                <button v-if="editingDraftIndex !== null" @click="cancelDraftEdit" class="cancel-btn">
-                                    Cancel
-                                </button>
+
+                            <div class="input-row">
+                                <label for="profileDescription">About Me:</label>
+                                <textarea id="profileDescription" v-model="profileDescription"
+                                    placeholder="Tell us about yourself..."></textarea>
                             </div>
+
+                            <div class="input-row">
+                                <label for="profilePicture">Profile Picture:</label>
+                                <input type="file" id="profilePicture" accept="image/*" @change="handleFileSelect" />
+                            </div>
+
+                            <button @click="saveProfile($graffitiSession.value)" class="profile-save-btn">
+                                Save Profile
+                            </button>
                         </div>
-                        
-                        <div class="saved-drafts">
-                            <h3>Saved Drafts</h3>
-                            <div v-if="drafts.length === 0" class="no-drafts">
-                                No saved drafts. Create one above!
-                            </div>
-                            <div v-else class="draft-list">
-                                <div 
-                                    v-for="(draft, index) in drafts" 
-                                    :key="draft.id"
-                                    class="draft-item">
-                                    <div class="draft-header">
-                                        <strong>To: {{ draft.recipient }}</strong>
-                                        <span class="timestamp">
-                                            {{ formatTime(draft.updatedAt || draft.createdAt) }}
-                                        </span>
-                                    </div>
-                                    <div class="draft-content">
-                                        {{ draft.content }}
-                                    </div>
-                                    <div class="draft-actions">
-                                        <button @click="useDraft(draft)" class="action-btn">
-                                            Use Draft
-                                        </button>
-                                        <button @click="editDraft(index)" class="action-btn">
-                                            Edit
-                                        </button>
-                                        <button @click="deleteDraft(index)" class="action-btn delete-btn">
-                                            Delete
-                                        </button>
-                                    </div>
+                    </div>
+
+                    <div v-if="profileName || profilePicture || profileBirthday || profileDescription"
+                        class="profile-preview">
+                        <h3>Profile Preview</h3>
+                        <div class="profile-card">
+                            <div class="profile-card-header">
+                                <profile-avatar :size="60" :name="profileName" :picture="profilePicture">
+                                </profile-avatar>
+                                <div class="profile-card-info">
+                                    <h4>{{ profileName || 'Anonymous' }}</h4>
+                                    <p v-if="profileBirthday">Birthday: {{ formattedBirthday }}</p>
                                 </div>
+                            </div>
+                            <div v-if="profileDescription" class="profile-card-description">
+                                <p>{{ profileDescription }}</p>
                             </div>
                         </div>
                     </div>
                 </div>
-                
-                <div v-else class="chat-view">
-                    <div class="chat-header">
-                        <button @click="exitChat" class="back-btn">Back</button>
-                        
-                        <div v-if="!isRenamingGroup" class="chat-title">
-                            <h2>{{ currentChatName }}</h2>
-                            <button @click="startRenamingGroup" class="edit-btn">Rename</button>
+
+                <div v-if="activeTab === 'chats'" class="home-container">
+                    <div class="user-profile-summary">
+                        <profile-avatar :size="40" :name="profileName" :picture="profilePicture">
+                        </profile-avatar>
+                        <span class="user-name">{{ profileName || 'Anonymous' }}</span>
+                    </div>
+
+                    <h2>Create Chat</h2>
+                    <div class="input-group">
+                        <input type="text" v-model="newChatName" placeholder="Enter chat name"
+                            @keyup.enter="createChat($graffitiSession.value)" />
+                        <button @click="createChat($graffitiSession.value)">Create</button>
+                    </div>
+
+                    <h2>Available Chats</h2>
+                    <graffiti-discover v-slot="{ objects: chatObjects, isInitialPolling }" :channels="channels"
+                        :schema="chatSchema">
+                        <graffiti-discover v-slot="{ objects: nameUpdates }" :channels="channels"
+                            :schema="groupNameSchema">
+                            <div v-if="isInitialPolling">Loading chats...</div>
+                            <div v-else-if="chatObjects.length === 0">No chats available. Create one!</div>
+                            <div v-else class="chat-list">
+                                <div v-for="chat in chatObjects" :key="chat.url" class="chat-item"
+                                    @click="enterChat(chat.value.object.channel, getLatestChatName(chat, nameUpdates))">
+                                    {{ getLatestChatName(chat, nameUpdates) }}
+                                </div>
+                            </div>
+                        </graffiti-discover>
+                    </graffiti-discover>
+                </div>
+
+                <div v-if="activeTab === 'drafts'" class="drafts-tab">
+                    <h2>Message Drafts</h2>
+
+                    <div class="draft-form">
+                        <h3>{{ editingDraftIndex !== null ? 'Edit Draft' : 'New Draft' }}</h3>
+                        <div class="input-row">
+                            <label for="recipient">Recipient:</label>
+                            <input type="text" id="recipient" v-model="newDraft.recipient"
+                                placeholder="Enter recipient name" />
                         </div>
-                        <div v-else class="rename-form">
-                            <input 
-                                type="text" 
-                                v-model="newGroupName" 
-                                placeholder="New group name" 
-                                @keyup.enter="saveGroupName($graffitiSession.value)" />
-                            <button @click="saveGroupName($graffitiSession.value)">Save</button>
-                            <button @click="cancelRenamingGroup" class="cancel-btn">Cancel</button>
+                        <div class="input-row">
+                            <label for="draftContent">Message:</label>
+                            <textarea id="draftContent" v-model="newDraft.content"
+                                placeholder="Type your message draft here..."></textarea>
+                        </div>
+                        <div class="draft-actions">
+                            <button v-if="editingDraftIndex !== null" @click="updateDraft">
+                                Update Draft
+                            </button>
+                            <button v-else @click="addDraft">
+                                Save Draft
+                            </button>
+                            <button v-if="editingDraftIndex !== null" @click="cancelDraftEdit" class="cancel-btn">
+                                Cancel
+                            </button>
                         </div>
                     </div>
-                    
-                    <graffiti-discover
-                        v-slot="{ objects: messageObjects, isInitialPolling }"
-                        :channels="currentChatChannel"
-                        :schema="messageSchema"
-                    >
-                        <div v-if="isInitialPolling" class="loading-messages">Loading messages...</div>
-                        <div v-else-if="messageObjects.length === 0" class="no-messages">
-                            No messages yet. Be the first to send a message!
+
+                    <div class="saved-drafts">
+                        <h3>Saved Drafts</h3>
+                        <div v-if="drafts.length === 0" class="no-drafts">
+                            No saved drafts. Create one above!
                         </div>
-                        <div v-else class="message-list">
-                            <div 
-                                v-for="message in messageObjects.sort((a, b) => a.value.timestamp - b.value.timestamp)" 
-                                :key="message.url"
-                                class="message"
-                                :class="{ 'own-message': isOwnMessage(message), 'message-other': !isOwnMessage(message) }"
-                            >
-                                <div v-if="editingMessageId !== message.url">
-                                    <div class="message-header">
-                                        <strong>{{ message.actor === $graffitiSession.value.actor ? 'You' : message.actor.substring(0, 8) }}</strong>
-                                        <span class="timestamp">{{ formatTime(message.value.timestamp) }}</span>
-                                    </div>
-                                    <div class="message-content">{{ message.value.content }}</div>
-                                    
-                                    <div v-if="isOwnMessage(message)" class="message-actions">
-                                        <button @click="startEditingMessage(message)" class="action-btn">Edit</button>
-                                        <button @click="deleteMessage(message, $graffitiSession.value)" class="action-btn delete-btn">Delete</button>
-                                    </div>
+                        <div v-else class="draft-list">
+                            <div v-for="(draft, index) in drafts" :key="draft.id" class="draft-item">
+                                <div class="draft-header">
+                                    <strong>To: {{ draft.recipient }}</strong>
+                                    <span class="timestamp">
+                                        {{ formatTime(draft.updatedAt || draft.createdAt) }}
+                                    </span>
+                                </div>
+                                <div class="draft-content">
+                                    {{ draft.content }}
                                 </div>
 
-                                <div v-else class="edit-message-form">
-                                    <textarea v-model="editedContent"></textarea>
-                                    <div class="edit-actions">
-                                        <button @click="saveEditedMessage(message, $graffitiSession.value)" class="action-btn">Save</button>
-                                        <button @click="cancelEditingMessage" class="action-btn cancel-btn">Cancel</button>
-                                    </div>
+                                <div class="draft-actions">
+                                    <button @click="useDraft(draft)" class="action-btn">
+                                        Use Draft
+                                    </button>
+                                    <button @click="editDraft(index)" class="action-btn">
+                                        Edit
+                                    </button>
+                                    <button @click="deleteDraft(index)" class="action-btn delete-btn">
+                                        Delete
+                                    </button>
                                 </div>
                             </div>
                         </div>
-                    </graffiti-discover>
-                    
-                    <form @submit.prevent="sendMessage($graffitiSession.value)" class="message-form">
-                        <fieldset :disabled="sending">
-                            <input
-                                type="text"
-                                v-model="newMessage"
-                                placeholder="Type your message..."
-                                ref="messageInput"
-                            />
-                            <input
-                                type="submit"
-                                :value="sending ? 'Sending...' : 'Send'"
-                                class="send-btn"
-                            />
-                        </fieldset>
-                    </form>
+                    </div>
                 </div>
             </div>
-        </div>
 
-        <script src="app.js" type="module"></script>
-    </body>
+            <div v-else class="chat-view">
+                <div class="chat-header">
+                    <button @click="exitChat" class="back-btn">Back</button>
+
+                    <div v-if="!isRenamingGroup" class="chat-title">
+                        <h2>{{ currentChatName }}</h2>
+                        <button @click="startRenamingGroup" class="edit-btn">Rename</button>
+                    </div>
+                    <div v-else class="rename-form">
+                        <input type="text" v-model="newGroupName" placeholder="New group name"
+                            @keyup.enter="saveGroupName($graffitiSession.value)" />
+                        <button @click="saveGroupName($graffitiSession.value)">Save</button>
+                        <button @click="cancelRenamingGroup" class="cancel-btn">Cancel</button>
+                    </div>
+                </div>
+
+                <graffiti-discover v-slot="{ objects: messageObjects, isInitialPolling }" :channels="currentChatChannel"
+                    :schema="messageSchema">
+                    <div v-if="isInitialPolling" class="loading-messages">Loading messages...</div>
+                    <div v-else-if="messageObjects.length === 0" class="no-messages">
+                        No messages yet. Be the first to send a message!
+                    </div>
+                    <div v-else class="message-list">
+                        <div v-for="message in messageObjects.sort((a, b) => a.value.timestamp - b.value.timestamp)"
+                            :key="message.url" class="message"
+                            :class="{ 'own-message': isOwnMessage(message), 'message-other': !isOwnMessage(message) }">
+                            <div v-if="editingMessageId !== message.url">
+                                <div class="message-header">
+                                    <div class="user-info">
+                                        <profile-avatar :size="24" :name="getUserName(message)"
+                                            :picture="getUserPicture(message)">
+                                        </profile-avatar>
+                                        <strong>{{ getUserName(message) }}</strong>
+                                    </div>
+                                    <span class="timestamp">{{ formatTime(message.value.timestamp) }}</span>
+                                </div>
+                                <div class="message-content">{{ message.value.content }}</div>
+
+                                <reaction-bar :item-id="message.url"></reaction-bar>
+
+                                <div v-if="isOwnMessage(message)" class="message-actions">
+                                    <button @click="startEditingMessage(message)" class="action-btn">Edit</button>
+                                    <button @click="deleteMessage(message, $graffitiSession.value)"
+                                        class="action-btn delete-btn">Delete</button>
+                                </div>
+                            </div>
+
+                            <div v-else class="edit-message-form">
+                                <textarea v-model="editedContent"></textarea>
+                                <div class="edit-actions">
+                                    <button @click="saveEditedMessage(message, $graffitiSession.value)"
+                                        class="action-btn">Save</button>
+                                    <button @click="cancelEditingMessage" class="action-btn cancel-btn">Cancel</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </graffiti-discover>
+
+                <form @submit.prevent="sendMessage($graffitiSession.value)" class="message-form">
+                    <fieldset :disabled="sending">
+                        <input type="text" v-model="newMessage" placeholder="Type your message..." ref="messageInput" />
+                        <input type="submit" :value="sending ? 'Sending...' : 'Send'" class="send-btn" />
+                    </fieldset>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js" type="module"></script>
+</body>
+
 </html>
