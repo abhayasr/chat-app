@@ -119,12 +119,25 @@
                         :schema="chatSchema">
                         <graffiti-discover v-slot="{ objects: nameUpdates }" :channels="channels"
                             :schema="groupNameSchema">
+                            <div v-if="registerAvailableChats(chatObjects, nameUpdates)"></div>
+
                             <div v-if="isInitialPolling">Loading chats...</div>
-                            <div v-else-if="chatObjects.length === 0">No chats available. Create one!</div>
+                            <div
+                                v-else-if="chatObjects.filter(chat => !isDeletedChat(chat.value.object.channel)).length === 0">
+                                No chats available. Create one!
+                            </div>
                             <div v-else class="chat-list">
-                                <div v-for="chat in chatObjects" :key="chat.url" class="chat-item"
-                                    @click="enterChat(chat.value.object.channel, getLatestChatName(chat, nameUpdates))">
-                                    {{ getLatestChatName(chat, nameUpdates) }}
+                                <div v-for="chat in chatObjects.filter(chat => !isDeletedChat(chat.value.object.channel))"
+                                    :key="chat.url" class="chat-item">
+                                    <div class="chat-item-content"
+                                        @click="enterChat(chat.value.object.channel, getLatestChatName(chat, nameUpdates))">
+                                        {{ getLatestChatName(chat, nameUpdates) }}
+                                    </div>
+                                    <button
+                                        @click.stop="deleteChat(chat.value.object.channel, getLatestChatName(chat, nameUpdates), $graffitiSession.value)"
+                                        class="action-btn delete-btn">
+                                        Delete
+                                    </button>
                                 </div>
                             </div>
                         </graffiti-discover>
@@ -133,6 +146,16 @@
 
                 <div v-if="activeTab === 'drafts'" class="drafts-tab">
                     <h2>Message Drafts</h2>
+
+                    <graffiti-discover v-if="true" v-slot="{ objects: chatObjects }" :channels="channels"
+                        :schema="chatSchema" style="display: none;">
+                        <graffiti-discover v-slot="{ objects: nameUpdates }" :channels="channels"
+                            :schema="groupNameSchema">
+                            <div
+                                v-if="registerAvailableChats(chatObjects.filter(chat => !isDeletedChat(chat.value.object.channel)), nameUpdates)">
+                            </div>
+                        </graffiti-discover>
+                    </graffiti-discover>
 
                     <div class="draft-form">
                         <h3>{{ editingDraftIndex !== null ? 'Edit Draft' : 'New Draft' }}</h3>

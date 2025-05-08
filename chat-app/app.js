@@ -84,14 +84,13 @@ createApp({
       currentChatChannel: null,
       newGroupName: "",
       isRenamingGroup: false,
+      deletedChatIds: [],
       
-
       profileName: "",
       profilePicture: null,
       profileBirthday: "",
       profileDescription: "",
       selectedFile: null,
-
 
       userProfiles: {},
 
@@ -146,7 +145,6 @@ createApp({
         }
       },
       
-
       profileSchema: {
         properties: {
           value: {
@@ -159,7 +157,9 @@ createApp({
             }
           }
         }
-      }
+      },
+
+      availableChats: []
     };
   },
   
@@ -183,6 +183,12 @@ createApp({
   },
   
   mounted() {
+    this.$watch('$graffitiSession.value', (newSession, oldSession) => {
+      if (newSession && (!oldSession || newSession.actor !== oldSession.actor)) {
+        this.clearProfileOnLogin();
+      }
+    }, { immediate: true });
+    
     const savedProfile = localStorage.getItem('chat-profile');
     if (savedProfile) {
       const profile = JSON.parse(savedProfile);
@@ -203,9 +209,66 @@ createApp({
         this.userProfiles = {};
       }
     }
+
+    this.loadAvailableChats();
+    
+    const deletedChats = localStorage.getItem('deleted-chats');
+    if (deletedChats) {
+      this.deletedChatIds = JSON.parse(deletedChats);
+    }
+  },
+
+  watch: {
+    activeTab(newTab) {
+      if (newTab === 'drafts') {
+        this.loadAvailableChats();
+      }
+    }
   },
   
   methods: {
+    clearProfileOnLogin() {
+      this.profileName = "";
+      this.profilePicture = null;
+      this.profileBirthday = "";
+      this.profileDescription = "";
+      
+      localStorage.removeItem('chat-profile');
+      
+      console.log("Profile has been cleared for new user");
+    },
+    
+    isDeletedChat(channelId) {
+      return this.deletedChatIds.includes(channelId);
+    },
+    
+    loadAvailableChats() {
+      this.availableChats = [];
+    },
+
+    registerAvailableChats(chatObjects, nameUpdates) {
+      if (!chatObjects || !nameUpdates) return;
+
+      const filteredChats = chatObjects.filter(chat => 
+        !this.isDeletedChat(chat.value.object.channel)
+      );
+
+      this.availableChats = filteredChats.map(chat => {
+        return {
+          channelId: chat.value.object.channel,
+          name: this.getLatestChatName(chat, nameUpdates)
+        };
+      });
+      
+      return true;
+    },
+
+    findChatByName(name) {
+      return this.availableChats.find(chat => 
+        chat.name.toLowerCase() === name.toLowerCase()
+      );
+    },
+    
     async createChat(session) {
       if (!this.newChatName.trim() || !session) return;
       
@@ -228,6 +291,11 @@ createApp({
       
       this.newChatName = "";
       this.enterChat(channelId, this.newChatName);
+
+      this.availableChats.push({
+        channelId: channelId,
+        name: this.newChatName
+      });
     },
     
     enterChat(channel, name) {
@@ -247,6 +315,28 @@ createApp({
       this.currentChatId = null;
       this.currentChatName = "";
       this.currentChatChannel = null;
+    },
+    
+    async deleteChat(chatId, chatName, session) {
+      if (!session) return;
+      
+      if (confirm(`Are you sure you want to delete the chat "${chatName}"?`)) {
+        try {
+          this.deletedChatIds.push(chatId);
+          localStorage.setItem('deleted-chats', JSON.stringify(this.deletedChatIds));
+          
+          this.availableChats = this.availableChats.filter(chat => chat.channelId !== chatId);
+          
+          if (this.currentChatId === chatId) {
+            this.exitChat();
+          }
+          
+          this.$forceUpdate();
+        } catch (error) {
+          console.error("Error deleting chat:", error);
+          alert("Error deleting chat. Please try again.");
+        }
+      }
     },
     
     async sendMessage(session) {
@@ -553,6 +643,46 @@ createApp({
       if (savedDrafts) {
         this.drafts = JSON.parse(savedDrafts);
       }
+    },
+    async useDraft(draft) {
+      if (!this.$graffitiSession.value) {
+        alert("You need to be logged in to use drafts");
+        return;
+      }
+
+      if (!draft.recipient.trim() || !draft.content.trim()) {
+        alert("Draft recipient and content cannot be empty");
+        return;
+      }
+
+      const existingChat = this.findChatByName(draft.recipient);
+
+      if (existingChat) {
+        this.enterChat(existingChat.channelId, existingChat.name);
+        this.newMessage = draft.content;
+        
+        await this.$nextTick();
+        await this.sendMessage(this.$graffitiSession.value);
+        
+        const draftIndex = this.drafts.findIndex(d => d.id === draft.id);
+        if (draftIndex !== -1) {
+          this.deleteDraft(draftIndex);
+        }
+      } else {
+        this.newChatName = draft.recipient;
+        await this.createChat(this.$graffitiSession.value);
+        
+        await this.$nextTick();
+        this.newMessage = draft.content;
+        await this.sendMessage(this.$graffitiSession.value);
+        
+        const draftIndex = this.drafts.findIndex(d => d.id === draft.id);
+        if (draftIndex !== -1) {
+          this.deleteDraft(draftIndex);
+        }
+      }
+
+      this.switchTab('chats');
     }
   }
 })
