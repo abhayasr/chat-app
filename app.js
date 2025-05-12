@@ -8,7 +8,8 @@ const ReactionBar = {
   data() {
     return {
       emojis: ['👍', '❤️', '‼️'],
-      reactions: {}
+      reactions: {},
+      reactionCounts: {}
     }
   },
   mounted() {
@@ -16,6 +17,7 @@ const ReactionBar = {
     if (saved) {
       this.reactions = JSON.parse(saved);
     }
+    this.updateReactionCounts();
   },
   methods: {
     toggleReaction(emoji) {
@@ -25,9 +27,16 @@ const ReactionBar = {
         this.reactions[emoji] = true;
       }
       localStorage.setItem(`reactions-${this.itemId}`, JSON.stringify(this.reactions));
+      this.updateReactionCounts();
     },
     isActive(emoji) {
       return this.reactions[emoji] === true;
+    },
+    updateReactionCounts() {
+      this.reactionCounts = Object.keys(this.reactions).reduce((counts, emoji) => {
+        counts[emoji] = this.reactions[emoji] ? 1 : 0;
+        return counts;
+      }, {});
     }
   },
   template: `
@@ -37,7 +46,7 @@ const ReactionBar = {
         :key="emoji"
         @click="toggleReaction(emoji)"
         :class="['reaction-button', { active: isActive(emoji) }]">
-        {{ emoji }}
+        {{ emoji }} <span v-if="reactionCounts && reactionCounts[emoji]" class="reaction-count">{{ reactionCounts[emoji] }}</span>
       </button>
     </div>
   `
@@ -85,6 +94,9 @@ createApp({
       newGroupName: "",
       isRenamingGroup: false,
       deletedChatIds: [],
+      showEmojiPicker: false,
+      emojis: ["😊", "👍", "❤️", "😂", "🎉", "🔥", "👏", "🤔", "😎", "🙏", 
+         "✨", "🥰", "😍", "🤩", "😇", "🤣", "⭐", "🎊", "💯", "💖"],
       
       profileName: "",
       profilePicture: null,
@@ -100,6 +112,7 @@ createApp({
         content: ""
       },
       editingDraftIndex: null,
+      showDraftsMenu: false,
       
       chatSchema: {
         properties: {
@@ -159,7 +172,9 @@ createApp({
         }
       },
 
-      availableChats: []
+      availableChats: [],
+      visibleChats: [],
+      chatRefreshKey: 0 
     };
   },
   
@@ -179,63 +194,166 @@ createApp({
       } catch (e) {
         return this.profileBirthday;
       }
+    },
+    currentUserId() {
+      return this.$graffitiSession.value?.actor || '';
+    },
+    currentUsername() {
+      if (this.profileName) {
+        return this.profileName;
+      }
+      
+      if (this.currentUserId) {
+        const parts = this.currentUserId.split('/');
+        if (parts.length > 0) {
+          return parts[parts.length - 1].substring(0, 8);
+        }
+      }
+      
+      return 'Guest';
     }
   },
   
   mounted() {
     this.$watch('$graffitiSession.value', (newSession, oldSession) => {
-      if (newSession && (!oldSession || newSession.actor !== oldSession.actor)) {
-        this.clearProfileOnLogin();
+      if (!newSession) {
+        this.clearUserData();
+      } else if (newSession && (!oldSession || newSession.actor !== oldSession.actor)) {
+        this.clearUserData();
+        this.loadUserData(newSession.actor);
+        
+        this.$nextTick(() => {
+          this.refreshChatDiscovery();
+        });
       }
     }, { immediate: true });
-    
-    const savedProfile = localStorage.getItem('chat-profile');
-    if (savedProfile) {
-      const profile = JSON.parse(savedProfile);
-      this.profileName = profile.name || '';
-      this.profilePicture = profile.picture || null;
-      this.profileBirthday = profile.birthday || '';
-      this.profileDescription = profile.description || '';
-    }
-    
-    this.loadDraftsFromStorage();
-    
-    const savedUserProfiles = localStorage.getItem('user-profiles-cache');
-    if (savedUserProfiles) {
-      try {
-        this.userProfiles = JSON.parse(savedUserProfiles);
-      } catch (e) {
-        console.error("Error loading user profiles cache:", e);
-        this.userProfiles = {};
-      }
-    }
-
-    this.loadAvailableChats();
-    
-    const deletedChats = localStorage.getItem('deleted-chats');
-    if (deletedChats) {
-      this.deletedChatIds = JSON.parse(deletedChats);
-    }
   },
 
   watch: {
-    activeTab(newTab) {
-      if (newTab === 'drafts') {
-        this.loadAvailableChats();
+    activeTab: {
+      handler(newTab) {
+        if (newTab === 'drafts') {
+          this.loadAvailableChats();
+        }
+        if (newTab === 'chats') {
+          this.refreshChatDiscovery();
+        }
+      },
+      immediate: true
+    },
+    currentChatId() {
+      this.showDraftsMenu = false;
+    },
+    profileName(newName, oldName) {
+      if (newName !== oldName && oldName) {
+        this.updateChatNames();
       }
     }
   },
   
   methods: {
-    clearProfileOnLogin() {
+    getUserStorageKey(key, userId) {
+      const id = userId || this.currentUserId;
+      return `${id}-${key}`;
+    },
+    
+    loadUserData(userId) {
+      const savedProfile = localStorage.getItem(this.getUserStorageKey('chat-profile', userId));
+      if (savedProfile) {
+        try {
+          const profile = JSON.parse(savedProfile);
+          this.profileName = profile.name || '';
+          this.profilePicture = profile.picture || null;
+          this.profileBirthday = profile.birthday || '';
+          this.profileDescription = profile.description || '';
+        } catch (e) {
+          console.error("Error loading profile:", e);
+        }
+      }
+      
+      const savedDrafts = localStorage.getItem(this.getUserStorageKey('chat-drafts', userId));
+      if (savedDrafts) {
+        try {
+          this.drafts = JSON.parse(savedDrafts);
+        } catch (e) {
+          console.error("Error loading drafts:", e);
+          this.drafts = [];
+        }
+      } else {
+        this.drafts = [];
+      }
+      
+      const deletedChats = localStorage.getItem(this.getUserStorageKey('deleted-chats', userId));
+      if (deletedChats) {
+        try {
+          this.deletedChatIds = JSON.parse(deletedChats);
+        } catch (e) {
+          console.error("Error loading deleted chats:", e);
+          this.deletedChatIds = [];
+        }
+      } else {
+        this.deletedChatIds = [];
+      }
+      
+      const savedUserProfiles = localStorage.getItem(this.getUserStorageKey('user-profiles-cache', userId));
+      if (savedUserProfiles) {
+        try {
+          this.userProfiles = JSON.parse(savedUserProfiles);
+        } catch (e) {
+          console.error("Error loading user profiles cache:", e);
+          this.userProfiles = {};
+        }
+      } else {
+        this.userProfiles = {};
+      }
+      
+      this.loadAvailableChats();
+    },
+    
+    async updateProfileInMessages(session, oldName, newName) {
+      if (!session) return;
+      
+      const userChats = this.availableChats.map(chat => chat.channelId);
+      
+      for (const channelId of userChats) {
+        console.log(`Updating user profile in channel ${channelId} from ${oldName} to ${newName}`);
+      }
+    },
+
+    clearUserData() {
       this.profileName = "";
       this.profilePicture = null;
       this.profileBirthday = "";
       this.profileDescription = "";
+      this.drafts = [];
+      this.deletedChatIds = [];
+      this.userProfiles = {};
+      this.availableChats = [];
+      this.visibleChats = [];
+    },
+    
+    handleLogout() {
+      this.saveProfile(this.$graffitiSession.value);
+      this.saveDraftsToStorage();
       
-      localStorage.removeItem('chat-profile');
+      this.$graffiti.logout(this.$graffitiSession.value);
+    },
+    
+    getUserChats(chatObjects) {
+      if (!chatObjects) return [];
+      if (!this.currentUserId) return [];
+      const userCreatedChats = chatObjects.filter(chat => chat.actor === this.currentUserId);
+
+      const nonDeletedChats = chatObjects.filter(chat => !this.isDeletedChat(chat.value.object.channel));
       
-      console.log("Profile has been cleared for new user");
+      const targetedChats = nonDeletedChats.filter(chat => {
+        if (chat.actor === this.currentUserId) return false;
+        
+        const chatName = chat.value.object.name; 
+        return this.isTargetedToCurrentUser(chatName);
+      });
+      
+      return [...userCreatedChats, ...targetedChats];
     },
     
     isDeletedChat(channelId) {
@@ -244,21 +362,47 @@ createApp({
     
     loadAvailableChats() {
       this.availableChats = [];
+      this.visibleChats = [];
+    },
+
+    isTargetedToCurrentUser(chatName) {
+      if (!this.profileName) return false;
+      
+      return chatName.toLowerCase() === this.profileName.toLowerCase();
     },
 
     registerAvailableChats(chatObjects, nameUpdates) {
       if (!chatObjects || !nameUpdates) return;
 
-      const filteredChats = chatObjects.filter(chat => 
+      const userCreatedChats = chatObjects.filter(chat => 
+        chat.actor === this.currentUserId && 
         !this.isDeletedChat(chat.value.object.channel)
       );
-
-      this.availableChats = filteredChats.map(chat => {
+      
+      const targetedChats = chatObjects.filter(chat => {
+        if (this.isDeletedChat(chat.value.object.channel)) 
+          return false;
+        if (chat.actor === this.currentUserId) 
+          return false; 
+        
+        const chatName = this.getLatestChatName(chat, nameUpdates);
+        return this.isTargetedToCurrentUser(chatName);
+      });
+      
+      this.visibleChats = targetedChats;
+      
+      const allVisibleChats = [...userCreatedChats, ...targetedChats];
+      
+      this.availableChats = allVisibleChats.map(chat => {
         return {
           channelId: chat.value.object.channel,
-          name: this.getLatestChatName(chat, nameUpdates)
+          name: this.getLatestChatName(chat, nameUpdates),
+          isTargeted: chat.actor !== this.currentUserId,
+          actor: chat.actor 
         };
       });
+      
+      console.log("Available chats updated:", this.availableChats);
       
       return true;
     },
@@ -273,15 +417,17 @@ createApp({
       if (!this.newChatName.trim() || !session) return;
       
       const channelId = crypto.randomUUID();
-      
+      const chatName = this.newChatName.trim();
+    
       await this.$graffiti.put(
         {
           value: {
             activity: 'Create',
             object: {
               type: 'Group Chat',
-              name: this.newChatName,
-              channel: channelId
+              name: chatName,
+              channel: channelId,
+              creator: session.actor
             }
           },
           channels: this.channels
@@ -289,12 +435,24 @@ createApp({
         session
       );
       
+      await this.$graffiti.put(
+        {
+          value: {
+            name: chatName,
+            describes: channelId
+          },
+          channels: this.channels
+        },
+        session
+      );
+      
       this.newChatName = "";
-      this.enterChat(channelId, this.newChatName);
-
+      this.enterChat(channelId, chatName);
+    
       this.availableChats.push({
         channelId: channelId,
-        name: this.newChatName
+        name: chatName,
+        isTargeted: false
       });
     },
     
@@ -311,31 +469,43 @@ createApp({
       });
     },
     
+    insertEmoji(emoji) {
+      this.newMessage += emoji;
+      this.showEmojiPicker = false;
+      this.$refs.messageInput.focus();
+    },
+    
     exitChat() {
       this.currentChatId = null;
       this.currentChatName = "";
       this.currentChatChannel = null;
+      this.showDraftsMenu = false;
+      
+      this.$nextTick(() => {
+        this.refreshChatDiscovery();
+      });
+    },
+    
+    refreshChatDiscovery() {
+      this.availableChats = [];
+      this.visibleChats = [];
+      this.chatRefreshKey++;
     },
     
     async deleteChat(chatId, chatName, session) {
       if (!session) return;
       
       if (confirm(`Are you sure you want to delete the chat "${chatName}"?`)) {
-        try {
-          this.deletedChatIds.push(chatId);
-          localStorage.setItem('deleted-chats', JSON.stringify(this.deletedChatIds));
-          
-          this.availableChats = this.availableChats.filter(chat => chat.channelId !== chatId);
-          
-          if (this.currentChatId === chatId) {
-            this.exitChat();
-          }
-          
-          this.$forceUpdate();
-        } catch (error) {
-          console.error("Error deleting chat:", error);
-          alert("Error deleting chat. Please try again.");
+        this.deletedChatIds.push(chatId);
+        localStorage.setItem(this.getUserStorageKey('deleted-chats'), JSON.stringify(this.deletedChatIds));
+        
+        this.availableChats = this.availableChats.filter(chat => chat.channelId !== chatId);
+        
+        if (this.currentChatId === chatId) {
+          this.exitChat();
         }
+        
+        this.$forceUpdate();
       }
     },
     
@@ -353,7 +523,7 @@ createApp({
               content: this.newMessage,
               timestamp: Date.now(),
               userProfile: {
-                name: this.profileName || "Anonymous",
+                name: this.profileName || "Guest",
                 picture: this.profilePicture
               }
             },
@@ -383,6 +553,16 @@ createApp({
     cancelEditingMessage() {
       this.editingMessageId = null;
       this.editedContent = "";
+    },
+    
+    updateChatNames() {
+      if (!this.profileName) return;
+      for (let i = 0; i < this.availableChats.length; i++) {
+        const chat = this.availableChats[i];
+        if (chat.isTargeted) {
+          console.log(`Checking if chat ${chat.name} needs updating to ${this.profileName}`);
+        }
+      }
     },
     
     async saveEditedMessage(message, session) {
@@ -483,6 +663,9 @@ createApp({
         return;
       }
       
+      const oldName = this.userProfiles[session.actor]?.name || '';
+      const newName = this.profileName;
+      
       try {
         await this.$graffiti.put(
           {
@@ -497,7 +680,8 @@ createApp({
           session
         );
         
-        localStorage.setItem('chat-profile', JSON.stringify({
+        // Save to user-specific storage
+        localStorage.setItem(this.getUserStorageKey('chat-profile'), JSON.stringify({
           name: this.profileName,
           picture: this.profilePicture,
           birthday: this.profileBirthday,
@@ -510,6 +694,10 @@ createApp({
           birthday: this.profileBirthday,
           description: this.profileDescription
         });
+        
+        if (oldName !== newName && oldName) {
+          await this.updateProfileInMessages(session, oldName, newName);
+        }
         
         alert("Profile saved successfully!");
       } catch (error) {
@@ -536,7 +724,7 @@ createApp({
     
     cacheUserProfile(actorId, profile) {
       this.userProfiles[actorId] = profile;
-      localStorage.setItem('user-profiles-cache', JSON.stringify(this.userProfiles));
+      localStorage.setItem(this.getUserStorageKey('user-profiles-cache'), JSON.stringify(this.userProfiles));
     },
     
     isOwnMessage(message) {
@@ -635,15 +823,9 @@ createApp({
     },
     
     saveDraftsToStorage() {
-      localStorage.setItem('chat-drafts', JSON.stringify(this.drafts));
+      localStorage.setItem(this.getUserStorageKey('chat-drafts'), JSON.stringify(this.drafts));
     },
     
-    loadDraftsFromStorage() {
-      const savedDrafts = localStorage.getItem('chat-drafts');
-      if (savedDrafts) {
-        this.drafts = JSON.parse(savedDrafts);
-      }
-    },
     async useDraft(draft) {
       if (!this.$graffitiSession.value) {
         alert("You need to be logged in to use drafts");
@@ -683,6 +865,38 @@ createApp({
       }
 
       this.switchTab('chats');
+    },
+    
+    toggleDraftsMenu() {
+      this.showDraftsMenu = !this.showDraftsMenu;
+    },
+    
+    getRelevantDrafts() {
+      if (!this.currentChatName) return [];
+      
+      return this.drafts.filter(draft => {
+        return draft.recipient.toLowerCase() === this.currentChatName.toLowerCase();
+      });
+    },
+    
+    useDraftInCurrentChat(draft) {
+      if (!this.$graffitiSession.value || !this.currentChatId) {
+        return;
+      }
+      
+      this.newMessage = draft.content;
+      this.showDraftsMenu = false;
+      
+      this.$nextTick(() => {
+        if (this.$refs.messageInput) {
+          this.$refs.messageInput.focus();
+        }
+      });
+      
+      const draftIndex = this.drafts.findIndex(d => d.id === draft.id);
+      if (draftIndex !== -1) {
+        this.deleteDraft(draftIndex);
+      }
     }
   }
 })
@@ -695,6 +909,5 @@ createApp({
 document.addEventListener("DOMContentLoaded", function() {
   const app = document.querySelector("#app").__vue_app__;
   if (app && app._instance) {
-    app._instance.proxy.loadDraftsFromStorage();
   }
 });

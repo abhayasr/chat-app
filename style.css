@@ -623,3 +623,239 @@ input[type="file"] {
 .own-message.sending {
     animation: messageBounceIn 0.6s cubic-bezier(0.18, 0.89, 0.32, 1.28) forwards;
 }
+
+.drafts-menu {
+    position: absolute;
+    bottom: 80px;
+    right: 15px;
+    background-color: white;
+    border-radius: 8px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+    max-width: 350px;
+    max-height: 300px;
+    overflow-y: auto;
+    z-index: 10;
+    border: 1px solid #ddd;
+}
+
+.drafts-menu-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 15px;
+    border-bottom: 1px solid #eee;
+    background-color: #f5f5f5;
+}
+
+.drafts-menu-header h4 {
+    margin: 0;
+}
+
+.drafts-menu-close {
+    background-color: transparent;
+    color: #666;
+    padding: 2px 6px;
+    font-size: 16px;
+    border-radius: 50%;
+}
+
+.drafts-menu-close:hover {
+    background-color: #eee;
+    color: #333;
+}
+
+.drafts-menu-list {
+    padding: 10px;
+}
+
+.drafts-menu-item {
+    padding: 10px;
+    border-bottom: 1px solid #eee;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.drafts-menu-item:last-child {
+    border-bottom: none;
+}
+
+.drafts-menu-item:hover {
+    background-color: #f5f5f5;
+}
+
+.drafts-menu-item-content {
+    font-size: 0.95rem;
+    margin-bottom: 8px;
+    color: #333;
+    word-break: break-word;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.drafts-menu-item-footer {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.drafts-menu-use {
+    background-color: #128c7e;
+    color: white;
+    border: none;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+    cursor: pointer;
+}
+
+.drafts-menu-use:hover {
+    background-color: #075e54;
+}
+
+.drafts-toggle-btn {
+    background-color: #f2f2f2;
+    color: #444;
+    border: 1px solid #ddd;
+    padding: 8px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 0.9rem;
+    position: absolute;
+    bottom: 25px;
+    right: 106px;
+    z-index: 5;
+}
+
+.drafts-toggle-btn:hover {
+    background-color: #e6e6e6;
+}
+
+.drafts-toggle-btn i {
+    font-size: 1.1rem;
+}
+
+.drafts-badge {
+    background-color: #128c7e;
+    color: white;
+    border-radius: 50%;
+    font-size: 0.7rem;
+    width: 16px;
+    height: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: 5px;
+}
+
+.no-relevant-drafts {
+    padding: 15px;
+    text-align: center;
+    color: #888;
+    font-style: italic;
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.drafts-menu {
+    animation: slideUp 0.3s ease forwards;
+}
+
+.emoji-picker {
+    position: absolute;
+    bottom: 80px;
+    left: 20px;
+    display: flex;
+    flex-wrap: wrap;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 8px;
+    padding: 8px;
+    max-width: 280px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    z-index: 100;
+  }
+  
+  .emoji-picker button {
+    background: none;
+    border: none;
+    font-size: 24px;
+    padding: 5px;
+    cursor: pointer;
+    transition: transform 0.2s;
+    width: 40px;
+    height: 40px;
+    border-radius: 4px;
+  }
+  
+  .emoji-picker button:hover {
+    background-color: #f0f0f0;
+    transform: scale(1.2);
+  }
+  
+  .emoji-btn {
+    background: none;
+    border: none;
+    font-size: 18px;
+    padding: 0 10px;
+    cursor: pointer;
+    opacity: 0.8;
+    transition: opacity 0.2s;
+  }
+  
+  .emoji-btn:hover {
+    opacity: 1;
+  }
+
+  .current-user-display {
+    background-color: rgba(18, 140, 126, 0.1);
+    padding: 8px 16px;
+    margin: 5px 10px;
+    border-radius: 4px;
+    font-size: 0.9rem;
+    color: #075e54;
+    border-left: 3px solid #128c7e;
+}
+
+.current-user-display strong {
+    font-weight: bold;
+}
+
+.login-btn {
+    margin: 20px auto;
+    display: block;
+    width: 200px;
+    font-size: 1.1rem;
+    padding: 12px 20px;
+    background-color: #34b7f1;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.login-btn:hover {
+    background-color: #0099e5;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+}
+
+.reaction-count {
+    display: inline-block;
+    background-color: rgba(0,0,0,0.1);
+    border-radius: 10px;
+    padding: 0 5px;
+    font-size: 0.8em;
+    margin-left: 2px;
+    min-width: 18px;
+    text-align: center;
+  }
