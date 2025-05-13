@@ -92,7 +92,7 @@
                                 <profile-avatar :size="60" :name="profileName" :picture="profilePicture">
                                 </profile-avatar>
                                 <div class="profile-card-info">
-                                    <h4>{{ profileName || 'Guest' }}</h4>
+                                    <h4>{{ profileName }}</h4>
                                     <p v-if="profileBirthday">Birthday: {{ formattedBirthday }}</p>
                                 </div>
                             </div>
@@ -107,7 +107,7 @@
                     <div class="user-profile-summary">
                         <profile-avatar :size="40" :name="profileName" :picture="profilePicture">
                         </profile-avatar>
-                        <span class="user-name">{{ profileName || 'Guest' }}</span>
+                        <span class="user-name">{{ profileName }}</span>
                     </div>
                     <h2>Create Chat</h2>
                     <div class="input-group">
@@ -129,14 +129,13 @@
                                 No chats available. Create one!
                             </div>
                             <div v-else class="chat-list">
-                                <div v-for="chat in getUserChats(chatObjects).filter(chat => !isDeletedChat(chat.value.object.channel))"
-                                    :key="chat.url" class="chat-item">
+                                <div v-for="chat in availableChats" :key="chat.channelId" class="chat-item">
                                     <div class="chat-item-content"
-                                        @click="enterChat(chat.value.object.channel, getLatestChatName(chat, nameUpdates))">
-                                        {{ getLatestChatName(chat, nameUpdates) }}
+                                        @click="enterChat(chat.channelId, getChatDisplayName(chat), chat.actor)">
+                                        {{ getChatDisplayName(chat) }}
                                     </div>
                                     <button
-                                        @click.stop="deleteChat(chat.value.object.channel, getLatestChatName(chat, nameUpdates), $graffitiSession.value)"
+                                        @click.stop="deleteChat(chat.channelId, getChatDisplayName(chat), $graffitiSession.value)"
                                         class="action-btn delete-btn">
                                         Delete
                                     </button>
